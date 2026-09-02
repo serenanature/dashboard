@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 
-# Define Melbourne Timezone (handles AEST/AEDT automatically)
+# Define Melbourne Timezone
 MELBOURNE_TZ = ZoneInfo("Australia/Melbourne")
 
 # --- CONFIGURATION ---
@@ -98,6 +98,23 @@ st.markdown(
     div[data-testid="stExpander"] div[data-testid="stBlock"] {
         padding: 8px 14px 12px 14px !important;
     }
+
+    /* FORECAST CARD ROW STYLING */
+    .forecast-row {
+        background-color: #FFFFFF;
+        border: 1px solid #CBD5E1;
+        border-radius: 8px;
+        padding: 10px 14px;
+        margin-bottom: 6px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.95rem;
+    }
+    .fc-day { font-weight: 700; color: #0F172A; width: 25%; }
+    .fc-cond { color: #334155; width: 30%; }
+    .fc-temp { font-weight: 600; color: #0F172A; width: 25%; }
+    .fc-rain { font-weight: 600; color: #0284C7; width: 20%; text-align: right; }
     </style>
     """,
     unsafe_allow_html=True
@@ -283,10 +300,9 @@ with col1:
                 unsafe_allow_html=True
             )
 
-        # 7-Day Forecast High-Contrast HTML Table
+        # 7-Day Forecast (Clean Flex Layout)
         st.subheader("📅 7-Day Forecast")
         
-        table_rows = ""
         for i in range(len(daily.get("time", []))):
             date_obj = datetime.strptime(daily["time"][i], "%Y-%m-%d")
             day_name = "Today" if i == 0 else date_obj.strftime("%a %d %b")
@@ -297,37 +313,17 @@ with col1:
             rain_prob = daily["precipitation_probability_max"][i]
             rain_mm = daily["precipitation_sum"][i]
             
-            bg_color = "#FFFFFF" if i % 2 == 0 else "#F8FAFC"
-            
-            table_rows += f"""
-            <tr style="background-color: {bg_color}; border-bottom: 1px solid #E2E8F0; color: #0F172A; font-size: 0.95rem;">
-                <td style="padding: 10px 12px; font-weight: 700;">{day_name}</td>
-                <td style="padding: 10px 12px;">{condition}</td>
-                <td style="padding: 10px 12px; font-weight: 600;">{min_temp}°C - {max_temp}°C</td>
-                <td style="padding: 10px 12px; font-weight: 600; color: #0284C7;">{rain_prob}% ({rain_mm} mm)</td>
-            </tr>
-            """
-            
-        st.markdown(
-            f"""
-            <div style="overflow-x: auto; border: 1px solid #CBD5E1; border-radius: 10px; margin-bottom: 25px;">
-                <table style="width: 100%; border-collapse: collapse; text-align: left;">
-                    <thead>
-                        <tr style="background-color: #F1F5F9; color: #334155; font-size: 0.9rem; border-bottom: 2px solid #CBD5E1;">
-                            <th style="padding: 10px 12px;">Day</th>
-                            <th style="padding: 10px 12px;">Condition</th>
-                            <th style="padding: 10px 12px;">Temp Range</th>
-                            <th style="padding: 10px 12px;">Rain Chance</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {table_rows}
-                    </tbody>
-                </table>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+            st.markdown(
+                f"""
+                <div class="forecast-row">
+                    <div class="fc-day">{day_name}</div>
+                    <div class="fc-cond">{condition}</div>
+                    <div class="fc-temp">{min_temp}°C - {max_temp}°C</div>
+                    <div class="fc-rain">{rain_prob}% ({rain_mm} mm)</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
     else:
         st.error("Could not load weather data.")
         
