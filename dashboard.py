@@ -3,6 +3,10 @@ import requests
 import pandas as pd
 from bs4 import BeautifulSoup
 from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
+
+# Define Melbourne Timezone (handles AEST/AEDT automatically)
+MELBOURNE_TZ = ZoneInfo("Australia/Melbourne")
 
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Melbourne Dashboard", page_icon="🇦🇺", layout="wide")
@@ -13,8 +17,8 @@ st.markdown(
     <style>
     /* Global Page Styling */
     .stApp {
-        background-color: #F8FAFC; /* Clean off-white background */
-        color: #0F172A; /* High-contrast text */
+        background-color: #F8FAFC;
+        color: #0F172A;
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
 
@@ -37,14 +41,14 @@ st.markdown(
         margin-bottom: 15px !important;
     }
 
-    /* WEATHER METRICS FIX (High Contrast & Clear Fonts) */
+    /* WEATHER METRICS FIX */
     div[data-testid="stMetricLabel"] {
-        color: #334155 !important; /* Dark slate grey */
+        color: #334155 !important;
         font-size: 1.05rem !important;
         font-weight: 600 !important;
     }
     div[data-testid="stMetricValue"] {
-        color: #0F172A !important; /* Solid dark text */
+        color: #0F172A !important;
         font-size: 2.1rem !important;
         font-weight: 800 !important;
     }
@@ -76,31 +80,29 @@ st.markdown(
     .train-status {
         font-size: 0.85rem; 
         font-weight: 700; 
-        color: #C2410C; /* Amber/Orange status text */
+        color: #C2410C;
         background-color: #FFEDD5;
         padding: 5px 12px;
         border-radius: 16px;
         letter-spacing: 0.5px;
     }
 
-    /* NEWS SECTION: INCREASED FONT & REDUCED PADDING */
+    /* NEWS SECTION SPACING & FONTS */
     div[data-testid="stExpander"] {
         background-color: #FFFFFF !important;
         border: 1px solid #CBD5E1 !important;
         border-radius: 8px !important;
-        margin-bottom: 6px !important; /* Reduced gap between news items */
+        margin-bottom: 6px !important;
         box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
     }
 
-    /* News Expander Header Text */
     div[data-testid="stExpander"] summary span p {
-        font-size: 1.08rem !important; /* Increased font size */
+        font-size: 1.08rem !important;
         font-weight: 600 !important;
-        color: #1E3A8A !important; /* Dark blue news title */
+        color: #1E3A8A !important;
         line-height: 1.4 !important;
     }
 
-    /* News Inner Content Padding */
     div[data-testid="stExpander"] div[data-testid="stBlock"] {
         padding: 8px 14px 12px 14px !important;
     }
@@ -147,11 +149,13 @@ def get_vline_departures():
             if not dep_time_str:
                 continue
                 
-            dep_time = datetime.fromisoformat(dep_time_str.replace("Z", "+00:00"))
-            diff_minutes = int((dep_time - now_utc).total_seconds() // 60)
+            dep_time_utc = datetime.fromisoformat(dep_time_str.replace("Z", "+00:00"))
+            diff_minutes = int((dep_time_utc - now_utc).total_seconds() // 60)
             
             if diff_minutes >= 0:
-                local_time_str = dep_time.astimezone(timezone(timedelta(hours=10))).strftime("%H:%M")
+                # Convert UTC departure time to local Melbourne time
+                local_dep_time = dep_time_utc.astimezone(MELBOURNE_TZ)
+                local_time_str = local_dep_time.strftime("%H:%M")
                 
                 if diff_minutes < 60:
                     status_str = f"DEPARTING IN {diff_minutes}MIN"
@@ -176,11 +180,11 @@ def get_vline_departures():
         return generate_live_fallback_departures()
 
 def generate_live_fallback_departures():
-    now = datetime.now()
+    now_melbourne = datetime.now(MELBOURNE_TZ)
     offsets = [12, 34, 57, 85, 118] 
     fallback_data = []
     for mins in offsets:
-        dep_time = now + timedelta(minutes=mins)
+        dep_time = now_melbourne + timedelta(minutes=mins)
         hours = mins // 60
         remaining_m = mins % 60
         status = f"DEPARTING IN {mins}MIN" if mins < 60 else f"DEPARTING IN {hours}H {remaining_m}MIN"
@@ -225,7 +229,10 @@ def get_abc_melbourne_news():
 # --- DASHBOARD UI ---
 
 st.title("🇦🇺 Melbourne & Tarneit Live Dashboard")
-st.caption(f"Last Refreshed: {datetime.now().strftime('%A, %d %B %Y %I:%M %p')}")
+
+# Display page refresh time in explicit Melbourne Local Time
+now_melbourne_str = datetime.now(MELBOURNE_TZ).strftime('%A, %d %B %Y %I:%M %p %Z')
+st.caption(f"Last Refreshed: {now_melbourne_str}")
 
 col1, col2 = st.columns([1, 1.25], gap="medium")
 
@@ -244,7 +251,7 @@ with col1:
     else:
         st.error("Could not load weather data.")
         
-    st.write("") # Spacing
+    st.write("")
     
     # --- V/LINE SECTION ---
     st.header("🚆 Live V/Line Departures")
