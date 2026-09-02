@@ -11,14 +11,25 @@ MELBOURNE_TZ = ZoneInfo("Australia/Melbourne")
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Melbourne Dashboard", page_icon="🇦🇺", layout="wide")
 
-# --- CUSTOM CSS FOR BETTER READABILITY & SPACING ---
+# WMO Weather Code Descriptions & Icons
+WMO_CODES = {
+    0: "☀️ Clear",
+    1: "🌤️ Mostly Clear", 2: "⛅ Partly Cloudy", 3: "☁️ Overcast",
+    45: "🌫️ Foggy", 48: "🌫️ Foggy",
+    51: "🌦️ Light Drizzle", 53: "🌦️ Drizzle", 55: "🌧️ Heavy Drizzle",
+    61: "🌧️ Light Rain", 63: "🌧️ Moderate Rain", 65: "🌧️ Heavy Rain",
+    80: "🌦️ Showers", 81: "🌧️ Heavy Showers", 82: "⛈️ Violent Showers",
+    95: "⛈️ Thunderstorm"
+}
+
+# --- CUSTOM CSS FOR HIGH CONTRAST & CLEAN LAYOUT ---
 st.markdown(
     """
     <style>
-    /* Global Page Styling */
+    /* Global Page Background */
     .stApp {
-        background-color: #F8FAFC;
-        color: #0F172A;
+        background-color: #F8FAFC !important;
+        color: #0F172A !important;
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
 
@@ -39,25 +50,6 @@ st.markdown(
         padding-bottom: 6px;
         margin-top: 15px !important;
         margin-bottom: 15px !important;
-    }
-
-    /* WEATHER METRICS FIX */
-    div[data-testid="stMetricLabel"] {
-        color: #334155 !important;
-        font-size: 1.05rem !important;
-        font-weight: 600 !important;
-    }
-    div[data-testid="stMetricValue"] {
-        color: #0F172A !important;
-        font-size: 2.1rem !important;
-        font-weight: 800 !important;
-    }
-    div[data-testid="stMetric"] {
-        background-color: #FFFFFF;
-        padding: 14px 18px;
-        border-radius: 10px;
-        border: 1px solid #CBD5E1;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
     }
 
     /* V/LINE TRAIN ROWS */
@@ -115,12 +107,18 @@ st.markdown(
 
 @st.cache_data(ttl=900)
 def get_melbourne_weather():
-    """Fetches real-time Melbourne weather from Open-Meteo API."""
-    url = "https://api.open-meteo.com/v1/forecast?latitude=-37.814&longitude=144.9633&current_weather=true"
+    """Fetches real-time weather and 7-day forecast from Open-Meteo API."""
+    url = (
+        "https://api.open-meteo.com/v1/forecast?"
+        "latitude=-37.814&longitude=144.9633"
+        "&current_weather=true"
+        "&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max"
+        "&timezone=Australia%2FMelbourne"
+    )
     try:
         response = requests.get(url, timeout=10)
         response.raise_for_status()
-        return response.json()['current_weather']
+        return response.json()
     except Exception as e:
         return {"error": str(e)}
 
@@ -153,7 +151,6 @@ def get_vline_departures():
             diff_minutes = int((dep_time_utc - now_utc).total_seconds() // 60)
             
             if diff_minutes >= 0:
-                # Convert UTC departure time to local Melbourne time
                 local_dep_time = dep_time_utc.astimezone(MELBOURNE_TZ)
                 local_time_str = local_dep_time.strftime("%H:%M")
                 
@@ -242,12 +239,95 @@ with col1:
     weather_data = get_melbourne_weather()
     
     if "error" not in weather_data:
-        temp = weather_data.get("temperature", "--")
-        wind_speed = weather_data.get("windspeed", "--")
+        current = weather_data.get("current_weather", {})
+        daily = weather_data.get("daily", {})
         
-        w_col1, w_col2 = st.columns(2)
-        w_col1.metric(label="Temperature", value=f"{temp} °C")
-        w_col2.metric(label="Wind Speed", value=f"{wind_speed} km/h")
+        temp = current.get("temperature", "--")
+        rain_chance_today = daily.get("precipitation_probability_max", [0])[0]
+        rain_sum_today = daily.get("precipitation_sum", [0])[0]
+        
+        # High-Contrast Custom HTML Cards for Metrics
+        st.markdown(
+            f"""
+            <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+                <div style="flex: 1; background-color: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 10px; padding: 14px 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                    <div style="font-size: 0.95rem; font-weight: 600; color: #475569; margin-bottom: 4px;">Current Temp</div>
+                    <div style="font-size: 2.1rem; font-weight: 800; color: #0F172A;">{temp} °C</div>
+                </div>
+                <div style="flex: 1; background-color: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 10px; padding: 14px 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                    <div style="font-size: 0.95rem; font-weight: 600; color: #475569; margin-bottom: 4px;">Rain Chance Today</div>
+                    <div style="font-size: 2.1rem; font-weight: 800; color: #0F172A;">{rain_chance_today}%</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+        
+        # High-Contrast Rain Expectation Alert Box
+        if rain_chance_today >= 50 or rain_sum_today > 1.0:
+            st.markdown(
+                f"""
+                <div style="background-color: #FEF3C7; border-left: 5px solid #D97706; color: #78350F; padding: 12px 16px; border-radius: 8px; font-weight: 600; font-size: 0.98rem; margin-bottom: 20px;">
+                    ☔ <b>Rain Expected Today:</b> ~{rain_sum_today} mm expected ({rain_chance_today}% probability). Take an umbrella!
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        else:
+            st.markdown(
+                f"""
+                <div style="background-color: #E0F2FE; border-left: 5px solid #0284C7; color: #0C4A6E; padding: 12px 16px; border-radius: 8px; font-weight: 600; font-size: 0.98rem; margin-bottom: 20px;">
+                    ☀️ <b>Low Chance of Rain:</b> ~{rain_sum_today} mm expected ({rain_chance_today}% probability).
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+        # 7-Day Forecast High-Contrast HTML Table
+        st.subheader("📅 7-Day Forecast")
+        
+        table_rows = ""
+        for i in range(len(daily.get("time", []))):
+            date_obj = datetime.strptime(daily["time"][i], "%Y-%m-%d")
+            day_name = "Today" if i == 0 else date_obj.strftime("%a %d %b")
+            code = daily["weathercode"][i]
+            condition = WMO_CODES.get(code, "Clear")
+            min_temp = daily["temperature_2m_min"][i]
+            max_temp = daily["temperature_2m_max"][i]
+            rain_prob = daily["precipitation_probability_max"][i]
+            rain_mm = daily["precipitation_sum"][i]
+            
+            bg_color = "#FFFFFF" if i % 2 == 0 else "#F8FAFC"
+            
+            table_rows += f"""
+            <tr style="background-color: {bg_color}; border-bottom: 1px solid #E2E8F0; color: #0F172A; font-size: 0.95rem;">
+                <td style="padding: 10px 12px; font-weight: 700;">{day_name}</td>
+                <td style="padding: 10px 12px;">{condition}</td>
+                <td style="padding: 10px 12px; font-weight: 600;">{min_temp}°C - {max_temp}°C</td>
+                <td style="padding: 10px 12px; font-weight: 600; color: #0284C7;">{rain_prob}% ({rain_mm} mm)</td>
+            </tr>
+            """
+            
+        st.markdown(
+            f"""
+            <div style="overflow-x: auto; border: 1px solid #CBD5E1; border-radius: 10px; margin-bottom: 25px;">
+                <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                    <thead>
+                        <tr style="background-color: #F1F5F9; color: #334155; font-size: 0.9rem; border-bottom: 2px solid #CBD5E1;">
+                            <th style="padding: 10px 12px;">Day</th>
+                            <th style="padding: 10px 12px;">Condition</th>
+                            <th style="padding: 10px 12px;">Temp Range</th>
+                            <th style="padding: 10px 12px;">Rain Chance</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {table_rows}
+                    </tbody>
+                </table>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
     else:
         st.error("Could not load weather data.")
         
